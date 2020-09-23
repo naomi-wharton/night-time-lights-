@@ -1,0 +1,56 @@
+// Load Variables
+var variable =  'NOAA/VIIRS/DNB/MONTHLY_V1/VCMCFG';
+var start_date = '2014-01-01';
+var finish_date = '2019-12-31';
+var bands = 'avg_rad';
+var Admins = ee.FeatureCollection('FAO/GAUL/2015/level0');
+var region = Admins.filter(ee.Filter.eq('ADM0_NAME', 'India'));    
+// Create layer
+var dataset = ee.ImageCollection(variable)
+                  .filterDate(start_date, finish_date)
+                  .select(bands)
+                  .filterBounds(region);
+// Convert the layer
+dataset = dataset.map(function(img){
+  var date = img.get('system:time_start');
+  return img.set('system_time_start', date);
+});
+// Create function that takes an image, calculates statistics over geometry and returns the value and the corresponding date as a feature
+  var createData = function(img){
+  var date = img.get('system_time_start');
+  var valueMean = img.reduceRegion({
+    reducer: ee.Reducer.mean(), 
+    geometry: region,
+    scale: 500,
+    maxPixels: 1e13});
+  var valueSum = img.reduceRegion({
+    reducer: ee.Reducer.sum(), 
+    geometry: region,
+    scale: 500,
+    maxPixels: 1e13});
+ var valueMedian = img.reduceRegion({
+    reducer: ee.Reducer.median(), 
+    geometry: region,
+    scale: 500,
+    maxPixels: 1e13});
+  var valueStdDev = img.reduceRegion({
+    reducer: ee.Reducer.stdDev(), 
+    geometry: region,
+    scale: 500,
+    maxPixels: 1e13});
+  var ft = ee.Feature(null, {'system:time_start': date, 
+                             'date': ee.Date(date).format('Y/M/d'), 
+                             'Mean': valueMean.get('avg_rad'),
+                             'Sum': valueSum.get('avg_rad'),
+                             'Median': valueMedian.get('avg_rad'),
+                             'stdDev': valueStdDev.get('avg_rad'),});
+  return ft;
+};
+// Apply the function to each image in dataset
+var serie = dataset.map(createData);
+// Export the time-series as a csv
+Export.table.toDrive({collection: serie, 
+                      selectors: 'date, Mean, Sum, Median, stdDev',
+                      folder: 'monthly_statistics',
+                      fileFormat: 'CSV',
+});

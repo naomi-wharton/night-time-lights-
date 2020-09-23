@@ -1,0 +1,44 @@
+// Load boundary and dates
+var StartYY = 2014;
+var EndYY = 2019;
+var Admins = ee.FeatureCollection('FAO/GAUL/2015/level0');
+var box = Admins.filter(ee.Filter.eq('ADM0_NAME', 'India'));
+
+// Get Night-time light data
+var GetAllYears = function(year) {
+var NightLight = ee.ImageCollection('NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG')
+.filterDate(ee.Date.fromYMD(year, 1, 1), ee.Date.fromYMD(year, 12, 31))
+.select('avg_rad');
+
+// From ImageCollection to Image
+var Night = NightLight.max().rename([String(year)]);
+ return Night.toByte();
+ };
+ 
+// Create empty image
+var NightLight_img = ee.Image([]);
+
+// Add all years
+for (var year = StartYY; year <= EndYY; year++) {
+ NightLight_img = NightLight_img.addBands(GetAllYears(year));}
+
+// Map all bands = all years
+for (var year = StartYY; year <= EndYY; year++) {
+Map.addLayer (NightLight_img.select(String(year)).clip(box), plot_scale, String(year))}
+
+// Visualise
+var plot_palette =['#2b83ba', 'green', 'yellow', 'orange', 'red'];
+var plot_scale = {min: 0, max: 50, palette: plot_palette};
+print (NightLight_img);
+Map.addLayer (Box);
+Map.centerObject(Box);
+
+// Export image
+Export.image.toDrive({
+ image: NightLight_img,
+ description: 'NL',
+ folder:"NL2014-2019",
+ scale: 500,
+ region: Box.geometry().bounds(),
+ maxPixels: 10e10
+});

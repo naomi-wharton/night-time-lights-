@@ -1,0 +1,30 @@
+// Load boundary
+var Admins = ee.FeatureCollection('FAO/GAUL/2015/level0');
+var region = Admins.filter(ee.Filter.eq('ADM0_NAME', 'India'));
+Map.addLayer(region, {}, 'India', false);
+
+// Nighlights change
+var nl = ee.ImageCollection("NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG").select(['avg_rad'], ['nightlights']);
+var nl2014 = nl.filterDate('2014-01-01', '2014-12-31')
+.sum();
+var nl2019 = nl.filterDate('2019-01-01', '2019-12-31')
+.sum();
+var nlChange = nl2019.subtract(nl2014);
+Map.addLayer(nlChange.clip(region), '', 'NLChange2014-2019');
+
+// Concatenate the change images
+var changeImage = ee.Image.cat([nlChange]);
+
+// Do one reduce regions on the concatenated image
+var changeIndia = changeImage.reduceRegions({
+  collection: region, 
+  reducer: ee.Reducer.mean(), 
+  scale: 500,
+});
+
+// Export Image
+Export.image.toDrive({image: nlChange,
+                     folder:"change",
+                     region: region.geometry().bounds(),
+                     scale: 500,
+                     maxPixels:1e13})
